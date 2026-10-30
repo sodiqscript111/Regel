@@ -1,0 +1,10 @@
+states/
+*.TTrace
+*_TTrace_*
+
+*.exe
+*.test
+*.out
+/bin/
+/dist/
+/regel
