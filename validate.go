@@ -67,6 +67,8 @@ func (v *validator) checkName(kind, name string) {
 		v.report("%s %q is not a valid TLA+ identifier: use a letter, then letters, digits, or underscores", kind, name)
 	case reservedNames[name]:
 		v.report("%s %q clashes with a reserved name", kind, name)
+	case strings.HasPrefix(name, stepPrefix):
+		v.report("%s %q clashes with the reserved prefix %s", kind, name, stepPrefix)
 	}
 }
 

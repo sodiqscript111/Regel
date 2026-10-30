@@ -93,6 +93,7 @@ func TestValidateRejectsBadSpecs(t *testing.T) {
 		{"duplicate rules", regel.New("M").Workers("a").Step("one").Always("Safe", "TRUE").Always("Safe", "TRUE"), `rule "Safe" is declared more than once`},
 		{"rule named like a variable", regel.New("M").Var("x", 0).Workers("a").Step("one").Always("x", "TRUE"), `rule "x" has the same name as a variable`},
 		{"worker named like a variable", regel.New("M").Var("a", 0).Workers("a").Step("one"), `worker "a" has the same name as a variable`},
+		{"name with the step action prefix", regel.New("M").Var("Step_one", 0).Workers("a").Step("one"), `variable "Step_one" clashes with the reserved prefix Step_`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
