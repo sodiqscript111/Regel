@@ -11,6 +11,8 @@ const doneLabel = "done"
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 
+var reservedPrefixes = []string{stepPrefix, workerPrefix, workersPrefix}
+
 var reservedNames = nameSet(
 	"pc", "self", doneLabel, "vars", "Init", "Next", "Spec", "Worker", "Workers", "Finished", "TypeOK", NoDeadlock,
 
@@ -67,8 +69,12 @@ func (v *validator) checkName(kind, name string) {
 		v.report("%s %q is not a valid TLA+ identifier: use a letter, then letters, digits, or underscores", kind, name)
 	case reservedNames[name]:
 		v.report("%s %q clashes with a reserved name", kind, name)
-	case strings.HasPrefix(name, stepPrefix):
-		v.report("%s %q clashes with the reserved prefix %s", kind, name, stepPrefix)
+	default:
+		for _, prefix := range reservedPrefixes {
+			if strings.HasPrefix(name, prefix) {
+				v.report("%s %q clashes with the reserved prefix %s", kind, name, prefix)
+			}
+		}
 	}
 }
 
@@ -114,16 +120,24 @@ func (v *validator) checkPrograms(s *Spec, declared map[string]bool) {
 		v.report("spec has no steps")
 		return
 	}
+	names := map[string]bool{}
 	workers := map[string]bool{}
 	labels := map[string]bool{}
 	for _, p := range s.programs {
+		if !p.implicit {
+			v.checkName("program", p.name)
+		}
+		if names[p.name] {
+			v.report("program %q is declared more than once", p.name)
+		}
+		names[p.name] = true
 		v.checkWorkers(p, workers, declared)
 		v.checkSteps(p, labels, declared)
 	}
 }
 
 func (p *program) title() string {
-	if p.name == "" {
+	if p.implicit {
 		return "spec"
 	}
 	return fmt.Sprintf("program %q", p.name)

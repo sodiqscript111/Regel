@@ -7,7 +7,11 @@ import (
 	"strings"
 )
 
-const stepPrefix = "Step_"
+const (
+	stepPrefix    = "Step_"
+	workerPrefix  = "Worker_"
+	workersPrefix = "Workers_"
+)
 
 var (
 	sequencesUse  = regexp.MustCompile(`\b(Seq|Len|Append|Head|Tail|SubSeq|SelectSeq)\b|\\o\b|\\circ\b`)
@@ -43,7 +47,9 @@ func (s *Spec) Config() (string, error) {
 func (s *Spec) config(properties []string) string {
 	var out strings.Builder
 	out.WriteString("SPECIFICATION Spec\n\nCONSTANTS\n")
-	fmt.Fprintf(&out, "    Workers = {%s}\n", strings.Join(s.allWorkers(), ", "))
+	for _, p := range s.programs {
+		fmt.Fprintf(&out, "    %s = {%s}\n", s.workerSet(p), strings.Join(p.workers, ", "))
+	}
 	out.WriteString("\nINVARIANTS\n    TypeOK\n")
 	for _, rule := range s.rules {
 		if !rule.liveness {
@@ -69,12 +75,30 @@ func (s *Spec) properties() []string {
 	return names
 }
 
-func (s *Spec) allWorkers() []string {
-	var workers []string
-	for _, p := range s.programs {
-		workers = append(workers, p.workers...)
+func (s *Spec) hasOneDefaultProgram() bool {
+	return len(s.programs) == 1 && s.programs[0].implicit
+}
+
+func (s *Spec) workerSet(p *program) string {
+	if s.hasOneDefaultProgram() {
+		return "Workers"
 	}
-	return workers
+	return workersPrefix + p.name
+}
+
+func (s *Spec) workerAction(p *program) string {
+	if s.hasOneDefaultProgram() {
+		return "Worker"
+	}
+	return workerPrefix + p.name
+}
+
+func (s *Spec) workerSets() []string {
+	sets := make([]string, 0, len(s.programs))
+	for _, p := range s.programs {
+		sets = append(sets, s.workerSet(p))
+	}
+	return sets
 }
 
 func (s *Spec) variableNames() []string {
@@ -155,7 +179,13 @@ func (g *generator) modules() []string {
 
 func (g *generator) declarations() {
 	names := strings.Join(g.spec.variableNames(), ", ")
-	g.printf("CONSTANT Workers\n\n")
+	if g.spec.hasOneDefaultProgram() {
+		g.printf("CONSTANT Workers\n\n")
+	} else {
+		sets := g.spec.workerSets()
+		g.printf("CONSTANTS %s\n\n", strings.Join(sets, ", "))
+		g.printf("Workers == %s\n\n", strings.Join(sets, ` \cup `))
+	}
 	g.printf("VARIABLES %s\n\n", names)
 	g.printf("vars == <<%s>>\n\n", names)
 }
@@ -165,7 +195,18 @@ func (g *generator) init() {
 	for _, variable := range g.spec.vars {
 		g.printf("    /\\ %s\n", initialState(variable))
 	}
-	g.printf("    /\\ pc = [self \\in Workers |-> %s]\n\n", tlaString(g.spec.programs[0].firstLabel()))
+	g.printf("    /\\ pc = [self \\in Workers |-> %s]\n\n", g.startingLabel())
+}
+
+func (g *generator) startingLabel() string {
+	if g.spec.hasOneDefaultProgram() {
+		return tlaString(g.spec.programs[0].firstLabel())
+	}
+	cases := make([]string, 0, len(g.spec.programs))
+	for _, p := range g.spec.programs {
+		cases = append(cases, fmt.Sprintf(`self \in %s -> %s`, g.spec.workerSet(p), tlaString(p.firstLabel())))
+	}
+	return "CASE " + strings.Join(cases, " [] ")
 }
 
 func (p *program) firstLabel() string {
@@ -293,23 +334,41 @@ func (g *generator) finished() {
 }
 
 func (g *generator) worker() {
-	g.printf("Worker(self) ==\n")
-	for _, step := range g.spec.programs[0].steps {
-		g.printf("    \\/ %s(self)\n", actionName(step.label))
+	for _, p := range g.spec.programs {
+		g.printf("%s(self) ==\n", g.spec.workerAction(p))
+		for _, step := range p.steps {
+			g.printf("    \\/ %s(self)\n", actionName(step.label))
+		}
+		g.printf("\n")
 	}
-	g.printf("\n")
 }
 
 func (g *generator) next() {
-	g.printf("Next == (\\E self \\in Workers : Worker(self)) \\/ Finished\n\n")
+	clauses := make([]string, 0, len(g.spec.programs)+1)
+	for _, p := range g.spec.programs {
+		clauses = append(clauses, fmt.Sprintf(`(\E self \in %s : %s(self))`, g.spec.workerSet(p), g.spec.workerAction(p)))
+	}
+	clauses = append(clauses, "Finished")
+	g.printf("Next == %s\n\n", strings.Join(clauses, ` \/ `))
 }
 
 func (g *generator) specification() {
-	if len(g.spec.properties()) == 0 {
-		g.printf("Spec == Init /\\ [][Next]_vars\n\n")
-		return
+	spec := `Init /\ [][Next]_vars`
+	if len(g.spec.properties()) > 0 {
+		spec += ` /\ ` + g.fairness()
 	}
-	g.printf("Spec == Init /\\ [][Next]_vars /\\ \\A self \\in Workers : WF_vars(Worker(self))\n\n")
+	g.printf("Spec == %s\n\n", spec)
+}
+
+func (g *generator) fairness() string {
+	clauses := make([]string, 0, len(g.spec.programs))
+	for _, p := range g.spec.programs {
+		clauses = append(clauses, fmt.Sprintf(`\A self \in %s : WF_vars(%s(self))`, g.spec.workerSet(p), g.spec.workerAction(p)))
+	}
+	if len(clauses) == 1 {
+		return clauses[0]
+	}
+	return "(" + strings.Join(clauses, `) /\ (`) + ")"
 }
 
 func (g *generator) typeOK() {

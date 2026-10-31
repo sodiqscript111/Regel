@@ -1,9 +1,12 @@
 package regel
 
+import "slices"
+
 const (
 	NoDeadlock = "NoDeadlock"
 
-	finishesRule = "Finishes"
+	finishesRule       = "Finishes"
+	defaultProgramName = "main"
 )
 
 type Spec struct {
@@ -20,9 +23,14 @@ type variable struct {
 }
 
 type program struct {
-	name    string
-	workers []string
-	steps   []step
+	name     string
+	implicit bool
+	workers  []string
+	steps    []step
+}
+
+type ProgramBuilder struct {
+	program *program
 }
 
 type rule struct {
@@ -95,13 +103,30 @@ func (s *Spec) addRule(r rule) *Spec {
 	return s
 }
 
+func (s *Spec) Program(name string, workers ...string) *ProgramBuilder {
+	if s == nil {
+		return nil
+	}
+	p := &program{name: name, workers: slices.Clone(workers)}
+	s.programs = append(s.programs, p)
+	return &ProgramBuilder{program: p}
+}
+
+func (b *ProgramBuilder) Step(label string, ops ...Op) *ProgramBuilder {
+	if b == nil {
+		return nil
+	}
+	b.program.steps = append(b.program.steps, step{label: label, ops: ops})
+	return b
+}
+
 func (s *Spec) defaultProgram() *program {
 	for _, p := range s.programs {
-		if p.name == "" {
+		if p.implicit {
 			return p
 		}
 	}
-	p := &program{}
+	p := &program{name: defaultProgramName, implicit: true}
 	s.programs = append(s.programs, p)
 	return p
 }
