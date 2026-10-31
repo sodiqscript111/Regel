@@ -1,5 +1,11 @@
 package regel
 
+const (
+	NoDeadlock = "NoDeadlock"
+
+	finishesRule = "Finishes"
+)
+
 type Spec struct {
 	name     string
 	vars     []variable
@@ -20,8 +26,9 @@ type program struct {
 }
 
 type rule struct {
-	name string
-	expr string
+	name     string
+	expr     string
+	liveness bool
 }
 
 type RawValue string
@@ -69,10 +76,22 @@ func (s *Spec) Step(label string, ops ...Op) *Spec {
 }
 
 func (s *Spec) Always(name, expr string) *Spec {
+	return s.addRule(rule{name: name, expr: expr})
+}
+
+func (s *Spec) Eventually(name, expr string) *Spec {
+	return s.addRule(rule{name: name, expr: expr, liveness: true})
+}
+
+func (s *Spec) Finishes() *Spec {
+	return s.Eventually(finishesRule, `\A self \in Workers : pc[self] = "done"`)
+}
+
+func (s *Spec) addRule(r rule) *Spec {
 	if s == nil {
 		return nil
 	}
-	s.rules = append(s.rules, rule{name: name, expr: expr})
+	s.rules = append(s.rules, r)
 	return s
 }
 

@@ -44,7 +44,7 @@ func TestParseSamples(t *testing.T) {
 			steps: []string{"start", "a: check", "b: check", "a: debit", "b: debit"},
 		},
 		{
-			sample: "deadlock", exitCode: 11, verdict: Deadlock,
+			sample: "deadlock", exitCode: 11, verdict: Deadlock, violated: NoDeadlock,
 			generated: 5, distinct: 4,
 			steps: []string{"start", "a: first", "b: first"},
 		},

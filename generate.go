@@ -37,14 +37,36 @@ func (s *Spec) Config() (string, error) {
 	if err := s.Validate(); err != nil {
 		return "", err
 	}
+	return s.config(s.properties()), nil
+}
+
+func (s *Spec) config(properties []string) string {
 	var out strings.Builder
 	out.WriteString("SPECIFICATION Spec\n\nCONSTANTS\n")
 	fmt.Fprintf(&out, "    Workers = {%s}\n", strings.Join(s.allWorkers(), ", "))
 	out.WriteString("\nINVARIANTS\n    TypeOK\n")
 	for _, rule := range s.rules {
-		fmt.Fprintf(&out, "    %s\n", rule.name)
+		if !rule.liveness {
+			fmt.Fprintf(&out, "    %s\n", rule.name)
+		}
 	}
-	return out.String(), nil
+	if len(properties) > 0 {
+		out.WriteString("\nPROPERTIES\n")
+	}
+	for _, property := range properties {
+		fmt.Fprintf(&out, "    %s\n", property)
+	}
+	return out.String()
+}
+
+func (s *Spec) properties() []string {
+	var names []string
+	for _, rule := range s.rules {
+		if rule.liveness {
+			names = append(names, rule.name)
+		}
+	}
+	return names
 }
 
 func (s *Spec) allWorkers() []string {
@@ -283,7 +305,11 @@ func (g *generator) next() {
 }
 
 func (g *generator) specification() {
-	g.printf("Spec == Init /\\ [][Next]_vars\n\n")
+	if len(g.spec.properties()) == 0 {
+		g.printf("Spec == Init /\\ [][Next]_vars\n\n")
+		return
+	}
+	g.printf("Spec == Init /\\ [][Next]_vars /\\ \\A self \\in Workers : WF_vars(Worker(self))\n\n")
 }
 
 func (g *generator) typeOK() {
@@ -299,6 +325,10 @@ func (g *generator) typeOK() {
 
 func (g *generator) rules() {
 	for _, rule := range g.spec.rules {
+		if rule.liveness {
+			g.printf("%s == <>(%s)\n\n", rule.name, rule.expr)
+			continue
+		}
 		g.printf("%s == %s\n\n", rule.name, rule.expr)
 	}
 }

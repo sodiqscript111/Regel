@@ -12,7 +12,7 @@ const doneLabel = "done"
 var identifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 
 var reservedNames = nameSet(
-	"pc", "self", doneLabel, "vars", "Init", "Next", "Spec", "Worker", "Workers", "Finished", "TypeOK",
+	"pc", "self", doneLabel, "vars", "Init", "Next", "Spec", "Worker", "Workers", "Finished", "TypeOK", NoDeadlock,
 
 	"ACTION", "ASSUME", "ASSUMPTION", "AXIOM", "BOOLEAN", "BY", "CASE", "CHOOSE", "CONSTANT", "CONSTANTS",
 	"COROLLARY", "DEF", "DEFINE", "DEFS", "DOMAIN", "ELSE", "ENABLED", "EXCEPT", "EXTENDS", "FALSE", "HAVE",

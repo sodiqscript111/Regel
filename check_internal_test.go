@@ -1,6 +1,51 @@
 package regel
 
-import "testing"
+import (
+	"context"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestWithdrawFixedWithoutFairnessFailsAllFinish(t *testing.T) {
+	if os.Getenv("REGEL_SKIP_TLC") == "1" {
+		t.Skip("REGEL_SKIP_TLC=1 is set")
+	}
+	tools, err := findTools(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := New("WithdrawFixed").
+		Var("balance", 100).
+		Workers("a", "b").
+		Step("withdraw", Set("balance", "IF balance >= 60 THEN balance - 60 ELSE balance")).
+		Always("NoOverdraft", "balance >= 0").
+		Eventually("AllFinish", `\A self \in Workers : pc[self] = "done"`)
+	source, err := spec.Source()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := spec.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fairness := ` /\ \A self \in Workers : WF_vars(Worker(self))`
+	if !strings.Contains(source, fairness) {
+		t.Fatalf("source has no fairness to remove:\n%s", source)
+	}
+
+	result, err := tools.check(context.Background(), spec.name, strings.Replace(source, fairness, "", 1), config)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Verdict != PropertyViolated || result.ExitCode != 13 {
+		t.Fatalf("Verdict = %q, ExitCode = %d\n%s", result.Verdict, result.ExitCode, result.RawOutput)
+	}
+	if !result.Stutters {
+		t.Errorf("trace does not end in stuttering:\n%s", result)
+	}
+}
 
 func TestVerdictFor(t *testing.T) {
 	const finished = "Model checking completed. No error has been found."

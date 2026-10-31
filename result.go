@@ -98,6 +98,9 @@ func parseCount(text string) int64 {
 }
 
 func (r *Result) readViolated(messages []*message) {
+	if r.Verdict == Deadlock {
+		r.Violated = NoDeadlock
+	}
 	for _, m := range messages {
 		if m.code != codeInvariantViolated && m.code != codeInvariantViolatedAtStart {
 			continue

@@ -52,24 +52,54 @@ func (s *Spec) Check(ctx context.Context, options ...CheckOption) (*Result, erro
 	if err != nil {
 		return nil, err
 	}
-	dir, err := os.MkdirTemp("", "regel-")
-	if err != nil {
-		return nil, fmt.Errorf("could not create a temp folder: %w", err)
-	}
-	defer removeFolder(dir)
-	if err := writeModel(dir, s.name, source, config); err != nil {
-		return nil, err
-	}
-	output, exitCode, err := tools.run(ctx, dir, s.name)
+	result, err := tools.check(ctx, s.name, source, config)
 	if err != nil {
 		return nil, err
 	}
-	return newResult(exitCode, output), nil
+	if result.Verdict == PropertyViolated {
+		return s.nameBrokenProperty(ctx, tools, source, result)
+	}
+	return result, nil
+}
+
+func (s *Spec) nameBrokenProperty(ctx context.Context, tools tools, source string, result *Result) (*Result, error) {
+	properties := s.properties()
+	if len(properties) == 1 {
+		result.Violated = properties[0]
+		return result, nil
+	}
+	for _, property := range properties {
+		single, err := tools.check(ctx, s.name, source, s.config([]string{property}))
+		if err != nil {
+			return nil, err
+		}
+		if single.Verdict == PropertyViolated {
+			single.Violated = property
+			return single, nil
+		}
+	}
+	return result, nil
 }
 
 type tools struct {
 	java string
 	jar  string
+}
+
+func (t tools) check(ctx context.Context, name, source, config string) (*Result, error) {
+	dir, err := os.MkdirTemp("", "regel-")
+	if err != nil {
+		return nil, fmt.Errorf("could not create a temp folder: %w", err)
+	}
+	defer removeFolder(dir)
+	if err := writeModel(dir, name, source, config); err != nil {
+		return nil, err
+	}
+	output, exitCode, err := t.run(ctx, dir, name)
+	if err != nil {
+		return nil, err
+	}
+	return newResult(exitCode, output), nil
 }
 
 func findTools(options []CheckOption) (tools, error) {
