@@ -79,6 +79,60 @@ func TestCheckReferenceResults(t *testing.T) {
 	}
 }
 
+func TestCheckTraces(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    *regel.Spec
+		states  int
+		balance string
+	}{
+		{"Withdraw", withdraw(), 5, "-20"},
+		{"Withdraw amount 50, 3 workers", withdrawAmount(50, "a", "b", "c"), 7, "-50"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := check(t, test.spec)
+			if result.Violated != "NoOverdraft" {
+				t.Errorf("Violated = %q, want NoOverdraft", result.Violated)
+			}
+			if len(result.Trace) != test.states {
+				t.Fatalf("trace has %d states, want %d\n%s", len(result.Trace), test.states, result)
+			}
+			if got := result.Trace[test.states-1].Vars["balance"]; got != test.balance {
+				t.Errorf("final balance = %s, want %s", got, test.balance)
+			}
+		})
+	}
+}
+
+func TestCheckPrintsTheExpectedShape(t *testing.T) {
+	result := check(t, withdraw())
+	lines := strings.Split(result.String(), "\n")
+	if lines[0] != "FAILED: NoOverdraft was broken after 5 steps" {
+		t.Errorf("headline = %q", lines[0])
+	}
+	if len(lines) != 7 || lines[1] != "" {
+		t.Fatalf("output has the wrong shape:\n%s", result)
+	}
+	want := [][]string{
+		{"1", "start", "balance=100"},
+		{"2", "check", "balance=100"},
+		{"3", "check", "balance=100"},
+		{"4", "debit", "balance=40"},
+		{"5", "debit", "balance=-20"},
+	}
+	for i, fields := range want {
+		for _, field := range fields {
+			if !strings.Contains(lines[i+2], field) {
+				t.Errorf("line %q does not contain %q", lines[i+2], field)
+			}
+		}
+	}
+	if got := fmt.Sprint(result.Trace); !strings.Contains(result.String(), got) {
+		t.Errorf("Trace prints differently from the result:\n%s", got)
+	}
+}
+
 func TestCheckBlockedAwaitIsDeadlock(t *testing.T) {
 	spec := regel.New("Blocked").
 		Var("open", false).

@@ -8,44 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
 	"time"
 )
 
 const (
-	exitPassed    = 0
-	exitDeadlock  = 11
-	exitInvariant = 12
-	exitProperty  = 13
-
 	stopGracePeriod = 5 * time.Second
 	removeAttempts  = 10
 	removeBackoff   = 100 * time.Millisecond
 )
-
-type Verdict string
-
-const (
-	Passed            Verdict = "passed"
-	InvariantViolated Verdict = "invariant violated"
-	PropertyViolated  Verdict = "property violated"
-	Deadlock          Verdict = "deadlock"
-	ToolError         Verdict = "tool error"
-)
-
-type Result struct {
-	Verdict         Verdict
-	ExitCode        int
-	StatesGenerated int64
-	DistinctStates  int64
-	RawOutput       string
-}
-
-func (r *Result) Passed() bool {
-	return r != nil && r.Verdict == Passed
-}
 
 type checkConfig struct {
 	java string
@@ -201,44 +171,4 @@ func (t tools) run(ctx context.Context, dir, name string) (string, int, error) {
 		return "", 0, fmt.Errorf("could not run TLC: %w", err)
 	}
 	return output.String(), command.ProcessState.ExitCode(), nil
-}
-
-var statesPattern = regexp.MustCompile(`(?m)^([\d,]+) states generated, ([\d,]+) distinct states found`)
-
-func newResult(exitCode int, output string) *Result {
-	result := &Result{
-		Verdict:   verdictFor(exitCode, output),
-		ExitCode:  exitCode,
-		RawOutput: output,
-	}
-	if matches := statesPattern.FindAllStringSubmatch(output, -1); matches != nil {
-		last := matches[len(matches)-1]
-		result.StatesGenerated = parseCount(last[1])
-		result.DistinctStates = parseCount(last[2])
-	}
-	return result
-}
-
-func verdictFor(exitCode int, output string) Verdict {
-	switch exitCode {
-	case exitPassed:
-		if strings.Contains(output, "No error has been found") {
-			return Passed
-		}
-	case exitDeadlock:
-		return Deadlock
-	case exitInvariant:
-		return InvariantViolated
-	case exitProperty:
-		return PropertyViolated
-	}
-	return ToolError
-}
-
-func parseCount(text string) int64 {
-	count, err := strconv.ParseInt(strings.ReplaceAll(text, ",", ""), 10, 64)
-	if err != nil {
-		return 0
-	}
-	return count
 }

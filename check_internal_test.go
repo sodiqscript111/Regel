@@ -32,8 +32,12 @@ func TestVerdictFor(t *testing.T) {
 }
 
 func TestNewResultReadsTheFinalStateCounts(t *testing.T) {
-	output := "Progress(5) at 2026-10-31: 13 states generated (413 s/min), 10 distinct states found (318 ds/min), 1 states left on queue.\n" +
-		"1,234,567 states generated, 7,654 distinct states found, 1 states left on queue.\n"
+	output := "@!@!@STARTMSG 2200:0 @!@!@\n" +
+		"Progress(5) at 2026-10-31: 13 states generated (413 s/min), 10 distinct states found (318 ds/min), 1 states left on queue.\n" +
+		"@!@!@ENDMSG 2200 @!@!@\n" +
+		"@!@!@STARTMSG 2199:0 @!@!@\n" +
+		"1,234,567 states generated, 7,654 distinct states found, 1 states left on queue.\n" +
+		"@!@!@ENDMSG 2199 @!@!@\n"
 	result := newResult(12, output)
 	if result.StatesGenerated != 1234567 || result.DistinctStates != 7654 {
 		t.Fatalf("counts = %d, %d", result.StatesGenerated, result.DistinctStates)
