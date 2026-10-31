@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  TLA_RELEASE: v1.7.4
+  TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install TLC
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --location --silent --show-error --output tla2tools.jar \
+            "https://github.com/tlaplus/tlaplus/releases/download/${TLA_RELEASE}/tla2tools.jar"
+          echo "${TLA_SHA256}  tla2tools.jar" | sha256sum --check
+          echo "REGEL_JAVA=java" >> "$GITHUB_ENV"
+          echo "REGEL_TLA2TOOLS=${RUNNER_TEMP}/tla2tools.jar" >> "$GITHUB_ENV"
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
