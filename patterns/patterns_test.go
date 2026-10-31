@@ -74,6 +74,28 @@ func TestPatternsGenerateValidSpecs(t *testing.T) {
 	}
 }
 
+func TestRegistryPatternsBreakTheirStatedRule(t *testing.T) {
+	for _, pattern := range patterns.All() {
+		t.Run(pattern.Name, func(t *testing.T) {
+			broken, fixed := pattern.Build()
+			regeltest.Fails(t, broken, pattern.Rule)
+			regeltest.Holds(t, fixed)
+		})
+	}
+}
+
+func TestFind(t *testing.T) {
+	for _, name := range []string{"CheckThenAct", "checkthenact", "CHECKTHENACT"} {
+		pattern, found := patterns.Find(name)
+		if !found || pattern.Name != "CheckThenAct" {
+			t.Errorf("Find(%q) = %q, %v", name, pattern.Name, found)
+		}
+	}
+	if pattern, found := patterns.Find("Nope"); found {
+		t.Errorf("Find(Nope) = %q", pattern.Name)
+	}
+}
+
 func TestBadParametersReturnErrorsInsteadOfPanicking(t *testing.T) {
 	specs := map[string]func() (*regel.Spec, *regel.Spec){
 		"CheckThenAct":      func() (*regel.Spec, *regel.Spec) { return patterns.CheckThenAct(1, 0) },

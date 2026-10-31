@@ -103,21 +103,33 @@ func (t tools) check(ctx context.Context, name, source, config string) (*Result,
 }
 
 func findTools(options []CheckOption) (tools, error) {
+	java, err := FindJava(options...)
+	if err != nil {
+		return tools{}, err
+	}
+	jar, err := FindJar(options...)
+	if err != nil {
+		return tools{}, err
+	}
+	return tools{java: java, jar: jar}, nil
+}
+
+func newCheckConfig(options []CheckOption) checkConfig {
 	config := checkConfig{}
 	for _, option := range options {
 		if option != nil {
 			option(&config)
 		}
 	}
-	java, err := findJava(firstSet(config.java, os.Getenv("REGEL_JAVA"), "java"))
-	if err != nil {
-		return tools{}, err
-	}
-	jar, err := findJar(firstSet(config.jar, os.Getenv("REGEL_TLA2TOOLS")))
-	if err != nil {
-		return tools{}, err
-	}
-	return tools{java: java, jar: jar}, nil
+	return config
+}
+
+func FindJava(options ...CheckOption) (string, error) {
+	return locateJava(firstSet(newCheckConfig(options).java, os.Getenv("REGEL_JAVA"), "java"))
+}
+
+func FindJar(options ...CheckOption) (string, error) {
+	return locateJar(firstSet(newCheckConfig(options).jar, os.Getenv("REGEL_TLA2TOOLS")))
 }
 
 func firstSet(values ...string) string {
@@ -129,7 +141,7 @@ func firstSet(values ...string) string {
 	return ""
 }
 
-func findJava(java string) (string, error) {
+func locateJava(java string) (string, error) {
 	path, err := exec.LookPath(java)
 	if err != nil {
 		return "", fmt.Errorf("java not found at %q: pass WithJava, set REGEL_JAVA, or add java to PATH: %w", java, err)
@@ -137,7 +149,7 @@ func findJava(java string) (string, error) {
 	return filepath.Abs(path)
 }
 
-func findJar(jar string) (string, error) {
+func locateJar(jar string) (string, error) {
 	if jar == "" {
 		return "", errors.New("tla2tools.jar not found: pass WithJar or set REGEL_TLA2TOOLS to its path")
 	}
